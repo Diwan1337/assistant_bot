@@ -1,0 +1,74 @@
+from agents.planner       import load_planner
+from agents.refinement    import load_refiner
+from agents.search        import load_search
+from agents.summarization import load_summarizer
+from agents.evaluation    import eval_results, extract_links
+
+planner       = load_planner()
+refiner       = load_refiner()
+search_tool   = load_search()
+summarizer    = load_summarizer()
+
+# Максимальное число итераций уточнения для каждого шага
+MAX_ITER_PER_TASK = 2
+
+def _split_plan(plan_text: str) -> list[str]:
+    """
+    Парсим JSON-массив из текста плана:
+      ["Шаг 1", "Шаг 2", ...]
+    Если не удалось распарсить в список – возвращаем весь текст как один элемент.
+    """
+    try:
+        tasks = eval(plan_text)
+        if isinstance(tasks, list):
+            return tasks
+    except Exception:
+        pass
+    return [plan_text.strip()]
+
+def answer_query(user_query: str) -> str:
+    # 1. Планирование
+    plan_text = planner(user_query)
+    tasks     = _split_plan(plan_text)
+
+    # 2. Для каждого шага выполняем цикл «уточнение → поиск → оценка»
+    refined_queries: list[str] = []
+    search_results:  list[str] = []
+
+    for task in tasks:
+        # --- для текущего task заводим переменные для итераций ---
+        prev_links: list[str] = []
+        final_search_str: str = ""
+        refined_query: str    = ""
+
+        for iteration in range(MAX_ITER_PER_TASK):
+            # 2.1. Уточняем текст task → получаем refined_query
+            refined_query = refiner(task)
+            # 2.2. Выполняем поиск по refined_query
+            result_str   = search_tool(refined_query)
+            # 2.3. Извлекаем чистые ссылки для сравнения
+            curr_links   = extract_links(result_str)
+
+            # 2.4. Если это не первая итерация, проверяем, нашлись ли новые ссылки
+            if iteration > 0:
+                if not eval_results(prev_links, curr_links):
+                    # Никаких новых ссылок — прекращаем уточнения
+                    final_search_str = result_str
+                    break
+                # Иначе — есть «новые» ссылки, можно сохранить и попробовать ещё раз?
+                final_search_str = result_str
+                prev_links = curr_links.copy()
+                # (можно оставить task без изменений, либо добавить в refiner контекст предыдущих ссылок)
+                # В этой минимальной версии просто повторяем тот же refiner(task) ещё раз.
+            else:
+                # Первая итерация: просто сохраняем ссылки и идём к следующей итерации
+                final_search_str = result_str
+                prev_links = curr_links.copy()
+
+        # Завершаем цикл по iterations для данного task:
+        refined_queries.append(refined_query)
+        search_results.append(final_search_str)
+
+    # 3. Суммаризация через аналитического агента
+    final_answer = summarizer(user_query, tasks, refined_queries, search_results)
+    return final_answer
