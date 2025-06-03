@@ -1,0 +1,6 @@
+python-telegram-bot>=21.0a0   # pre‑release, требует httpx 0.28+
+google-genai>=1.18.0          # Gemini SDK
+langchain
+langchain-community
+google-search-results
+python-dotenv
