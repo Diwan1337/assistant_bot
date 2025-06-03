@@ -1,4 +1,4 @@
-# (Multi-Agent LLM Assistant Bot)
+# Multi-Agent LLM Assistant Bot
 ## [Мультиагентный LLM-ассистент через Telegram](https://github.com/Diwan1337/assistant_bot/blob/main/Архитектура_системы_Резинкин_Дмитрий_Владимирович.pdf)
 
 ---
